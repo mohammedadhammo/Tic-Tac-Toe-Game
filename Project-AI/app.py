@@ -1,5 +1,4 @@
 import streamlit as st
-import heapq
 
 
 def initialize_board():
@@ -7,153 +6,212 @@ def initialize_board():
 
 
 def check_winner(board, player):
+    """
+    فحص الفوز - يجب أن يكون هناك 3 من نفس الرمز (X أو O) في صف/عمود/قطر
+    """
+    
+    if player == " " or player is None:
+        return False
+    
+    
     for row in board:
-        if all(s == player for s in row):
+        if row[0] == row[1] == row[2] == player:
             return True
+    
+    
     for col in range(3):
-        if all(board[row][col] == player for row in range(3)):
+        if board[0][col] == board[1][col] == board[2][col] == player:
             return True
-    if all(board[i][i] == player for i in range(3)) or all(board[i][2 - i] == player for i in range(3)):
+    
+    
+    if board[0][0] == board[1][1] == board[2][2] == player:
         return True
+    if board[0][2] == board[1][1] == board[2][0] == player:
+        return True
+    
     return False
 
 
 def is_full(board):
-    return all(all(cell != " " for cell in row) for row in board)
-
-
-def heuristic(board, player):
-    opponent = "X" if player == "O" else "O"
-    score = 0
-
-    # تقييم الصفوف
+    """فحص إذا كانت اللوحة ممتلئة"""
     for row in board:
-        if row.count(player) > 0 and row.count(opponent) == 0:
-            score += 1
-
-    # تقييم الأعمدة
-    for col in range(3):
-        col_values = [board[row][col] for row in range(3)]
-        if col_values.count(player) > 0 and col_values.count(opponent) == 0:
-            score += 1
-
-    # تقييم الأقطار
-    diag1 = [board[i][i] for i in range(3)]
-    diag2 = [board[i][2 - i] for i in range(3)]
-    if diag1.count(player) > 0 and diag1.count(opponent) == 0:
-        score += 1
-    if diag2.count(player) > 0 and diag2.count(opponent) == 0:
-        score += 1
-
-    return score
+        for cell in row:
+            if cell == " ":
+                return False
+    return True
 
 
-def a_star(board, player):
-    opponent = "X" if player == "O" else "O"
-    priority_queue = []
-    heapq.heapify(priority_queue)
+# ================== MINIMAX AI ==================
+def minimax(board, is_maximizing):
+    """
+    خوارزمية Minimax لإيجاد أفضل حركة
+    الكمبيوتر هو O (maximizing)
+    اللاعب هو X (minimizing)
+    """
+    
+    if check_winner(board, "O"):
+        return 1
+    if check_winner(board, "X"):
+        return -1
+    if is_full(board):
+        return 0
 
-    for x in range(3):
-        for y in range(3):
-            if board[x][y] == " ":
-                new_board = [row[:] for row in board]
-                new_board[x][y] = player
-                g_cost = 1  # تكلفة الحركة الحالية
-                h_cost = heuristic(new_board, player)
-                total_cost = g_cost + h_cost
-                heapq.heappush(priority_queue, (-total_cost, (x, y)))
+    if is_maximizing:
+        best_score = -1000
+        for i in range(3):
+            for j in range(3):
+                if board[i][j] == " ":
+                    board[i][j] = "O"
+                    score = minimax(board, False)
+                    board[i][j] = " "
+                    best_score = max(best_score, score)
+        return best_score
+    else:
+        best_score = 1000
+        for i in range(3):
+            for j in range(3):
+                if board[i][j] == " ":
+                    board[i][j] = "X"
+                    score = minimax(board, True)
+                    board[i][j] = " "
+                    best_score = min(best_score, score)
+        return best_score
 
-    if priority_queue:
-        return heapq.heappop(priority_queue)[1]
-    return None
+
+def best_move(board):
+    """
+    إيجاد أفضل حركة للكمبيوتر باستخدام Minimax
+    """
+    best_score = -1000
+    move = None
+    for i in range(3):
+        for j in range(3):
+            if board[i][j] == " ":
+                board[i][j] = "O"
+                score = minimax(board, False)
+                board[i][j] = " "
+                if score > best_score:
+                    best_score = score
+                    move = (i, j)
+    return move
 
 
 def main():
     st.set_page_config(page_title="Tic Tac Toe", layout="centered")
 
+   
     if "board" not in st.session_state:
         st.session_state.board = initialize_board()
         st.session_state.winner = None
         st.session_state.current_player = "X"
         st.session_state.game_mode = "Player vs Player"
+        st.session_state.computer_turn = False
 
-    # Styling
+    
     st.markdown("""
-        <style>
-            .stButton>button {
-                height: 80px;
-                width: 150px;
-                font-size: 25px;
-                font-weight: bold;
-                background-color: rgb(145, 141, 141); /* خلفية سوداء */
-                color:rgb(255, 255, 255); /* لون النص ذهبي */
-                border: 2px solid #4682B4;
-                border-radius: 10px;
-                text-align: center; /* لضمان محاذاة النص */
-                transition: transform 0.2s, background-color 0.3s;
-            }
-            .stButton>button:hover {
-                background-color: #4682B4; /* خلفية أفتح عند التمرير */
-                color: white; /* لون النص أبيض عند التمرير */
-                transform: scale(1.1);
-            }
-            .winner {
-                font-size: 40px;
-                color: #FFD700; /* نص ذهبي */
-                text-align: center;
-                font-weight: bold;
-                text-shadow: 2px 2px 4px #000000; /* ظل أسود */
-            }
-            .title {
-                font-size: 50px;
-                color: #FF4500; /* عنوان برتقالي */
-                text-align: center;
-                font-weight: bold;
-                text-shadow: 2px 2px 5px #000000; /* ظل أسود */
-            }
-        </style>
+       <style>
+        .stButton>button {
+            height: 80px;
+            width: 150px;
+            font-size: 30px;
+            font-weight: bold;
+            color: #ffffff;
+            background-color: #4CAF50;
+            border-radius: 10px;
+            border: 2px solid #34a853;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .stButton>button:hover {
+            background-color: #45d17c;
+            transform: scale(1.05);
+        }
+        .stButton>button:disabled {
+            background-color: #d3d3d3 !important;
+            color: #808080 !important;
+        }
+        .winner {
+            font-size: 35px;
+            color: #FFD700;
+            text-align: center;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000000;
+        }
+        .title {
+            font-size: 40px;
+            color: #1E90FF;
+            text-align: center;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px #000000;
+        }
+    </style>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="title">Tic Tac Toe</div>', unsafe_allow_html=True)
 
+    
+    if (st.session_state.game_mode == "Player vs Computer" and 
+        st.session_state.computer_turn and 
+        not st.session_state.winner):
+        
+        move = best_move(st.session_state.board)
+        if move:
+            x, y = move
+            st.session_state.board[x][y] = "O"
+            
+            
+            winner_found = check_winner(st.session_state.board, "O")
+            board_full = is_full(st.session_state.board)
+            
+            if winner_found:
+                st.session_state.winner = "Computer"
+            elif board_full:
+                st.session_state.winner = "Tie"
+            
+            st.session_state.current_player = "X"
+            st.session_state.computer_turn = False
+        st.rerun()
+
+    
     if st.button("Switch to Player vs Computer" if st.session_state.game_mode == "Player vs Player" else "Switch to Player vs Player"):
         st.session_state.game_mode = "Player vs Computer" if st.session_state.game_mode == "Player vs Player" else "Player vs Player"
         st.session_state.board = initialize_board()
         st.session_state.winner = None
         st.session_state.current_player = "X"
+        st.session_state.computer_turn = False
+        st.rerun()
 
     st.markdown(f"### Current Mode: {st.session_state.game_mode}")
 
+    
     for i in range(3):
         cols = st.columns(3)
         for j in range(3):
             with cols[j]:
-                # إذا كانت الخانة فارغة
                 if st.session_state.board[i][j] == " " and st.session_state.winner is None:
                     if st.button(" ", key=f"{i}-{j}"):
-                        st.session_state.board[i][j] = st.session_state.current_player
-                        if check_winner(st.session_state.board, st.session_state.current_player):
-                            st.session_state.winner = f"Player {st.session_state.current_player}"
-                        elif is_full(st.session_state.board):
+                       
+                        st.session_state.board[i][j] = "X"
+                        
+                        
+                        winner_found = check_winner(st.session_state.board, "X")
+                        board_full = is_full(st.session_state.board)
+                        
+                        if winner_found:
+                            st.session_state.winner = "Player X"
+                        elif board_full:
                             st.session_state.winner = "Tie"
+                        elif st.session_state.game_mode == "Player vs Computer":
+                            
+                            st.session_state.computer_turn = True
                         else:
-                            st.session_state.current_player = "O" if st.session_state.current_player == "X" else "X"
+                            
+                            st.session_state.current_player = "O"
+                        
+                        st.rerun()
                 else:
-                    # إذا كانت الخانة مملوءة، عرض العلامة (X أو O)
                     st.button(st.session_state.board[i][j], key=f"{i}-{j}-disabled", disabled=True)
 
-    if st.session_state.game_mode == "Player vs Computer" and st.session_state.current_player == "O" and st.session_state.winner is None:
-        best_move = a_star(st.session_state.board, "O")
-        if best_move:
-            x, y = best_move
-            st.session_state.board[x][y] = "O"
-            if check_winner(st.session_state.board, "O"):
-                st.session_state.winner = "Computer"
-            elif is_full(st.session_state.board):
-                st.session_state.winner = "Tie"
-            else:
-                st.session_state.current_player = "X"
-
+    
     if st.session_state.winner:
         if st.session_state.winner == "Tie":
             st.markdown('<div class="winner">It\'s a Tie!</div>', unsafe_allow_html=True)
@@ -163,6 +221,8 @@ def main():
             st.session_state.board = initialize_board()
             st.session_state.winner = None
             st.session_state.current_player = "X"
+            st.session_state.computer_turn = False
+            st.rerun()
 
 
 if __name__ == "__main__":
